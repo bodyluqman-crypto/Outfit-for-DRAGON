@@ -7,7 +7,6 @@ import logging
 import urllib3
 import math
 import random
-import asyncio
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -17,7 +16,6 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 main_key = "DRAGON-TEAM"
 
-# الرابط السري لصور Free Fire
 INFO_URL = "https://cdn.jsdelivr.net/gh/ShahGCreator/icon@main/PNG"
 
 def fetch_player_info(uid):
@@ -44,32 +42,26 @@ def fetch_image(image_url, size=None):
     return None
 
 def make_circle_with_border(image, size, border_color):
-    """صورة دائرية مع إطار ملون"""
     if image is None:
         return None
     
     img = image.resize((size, size), Image.Resampling.LANCZOS)
     
-    # قناع دائري
     mask = Image.new('L', (size, size), 0)
     draw_mask = ImageDraw.Draw(mask)
     draw_mask.ellipse((0, 0, size, size), fill=255)
     
-    # الصورة الدائرية
     circular = Image.new('RGBA', (size, size), (0, 0, 0, 0))
     circular.paste(img, (0, 0), mask)
     
-    # إضافة إطار ملون
     border = Image.new('RGBA', (size + 16, size + 16), (0, 0, 0, 0))
     draw_border = ImageDraw.Draw(border)
     
-    # توهج خارجي
     for i in range(8, 0, -1):
         alpha = 50 - i * 5
         draw_border.ellipse((8 - i, 8 - i, size + 8 + i, size + 8 + i),
                            outline=(border_color[0], border_color[1], border_color[2], alpha), width=2)
     
-    # الإطار الرئيسي
     draw_border.ellipse((8, 8, size + 8, size + 8), outline=border_color, width=4)
     draw_border.ellipse((12, 12, size + 4, size + 4), outline=(255, 255, 255, 150), width=1)
     
@@ -77,12 +69,10 @@ def make_circle_with_border(image, size, border_color):
     return border
 
 def create_fancy_background():
-    """خلفية فخمة متدرجة الألوان"""
     width, height = 1200, 1200
     img = Image.new('RGBA', (width, height), (0, 0, 0, 255))
     draw = ImageDraw.Draw(img)
     
-    # تدرج لوني (بنفسجي إلى أزرق سماوي)
     for y in range(height):
         ratio = y / height
         r = int(40 + ratio * 60)
@@ -90,7 +80,6 @@ def create_fancy_background():
         b = int(70 + ratio * 150)
         draw.line([(0, y), (width, y)], fill=(r, g, b, 255), width=1)
     
-    # دوائر زخرفية
     colors = [
         (255, 100, 100, 40), (100, 255, 100, 40), (100, 100, 255, 40),
         (255, 255, 100, 40), (255, 100, 255, 40), (100, 255, 255, 40)
@@ -100,12 +89,10 @@ def create_fancy_background():
         draw.ellipse((width//2 - r, height//2 - r, width//2 + r, height//2 + r),
                     outline=color, width=3)
     
-    # خطوط زخرفية
     for i in range(0, width, 60):
         draw.line([(i, 0), (i, height)], fill=(255, 255, 255, 15), width=1)
         draw.line([(0, i), (width, i)], fill=(255, 255, 255, 15), width=1)
     
-    # نجوم
     for _ in range(150):
         x = random.randint(0, width)
         y = random.randint(0, height)
@@ -113,6 +100,19 @@ def create_fancy_background():
         draw.point((x, y), fill=(intensity, intensity, intensity, 255))
     
     return img
+
+def get_font(size, bold=False):
+    """دالة للحصول على الخط - تستخدم الخط الافتراضي للنظام"""
+    try:
+        # محاولة تحميل خط Arial على Vercel (مش موجود)
+        from PIL import ImageFont
+        font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+        if os.path.exists(font_path):
+            return ImageFont.truetype(font_path, size)
+    except:
+        pass
+    # استخدام الخط الافتراضي (بدون مشاكل)
+    return ImageFont.load_default()
 
 @app.route('/outfit-image', methods=['GET'])
 def outfit_image():
@@ -135,14 +135,12 @@ def outfit_image():
     weapon_id = data.get("basicInfo", {}).get("weaponSkinShows", [None])[0]
     player_name = data.get("basicInfo", {}).get("nickname", "WARRIOR")
 
-    # ترتيب الملابس
     required_codes = ["211", "214", "203", "204", "205", "208"]
     fallback_ids = ["211000000", "214000000", "203000077", "204000345", "205000070", "208000000"]
     
     used_ids = set()
     outfit_images = []
 
-    # جلب الصور (بدون threads متعددة لـ Vercel)
     for idx, code in enumerate(required_codes):
         matched = None
         for oid in clothes_ids:
@@ -156,45 +154,31 @@ def outfit_image():
         img = fetch_image(url, size=(130, 130))
         outfit_images.append(img)
 
-    # إنشاء الخلفية
     background = create_fancy_background()
     W, H = 1200, 1200
     draw = ImageDraw.Draw(background)
 
-    # تحميل الخطوط
-    try:
-        title_font = ImageFont.truetype("arialbd.ttf", 55)
-        big_font = ImageFont.truetype("arialbd.ttf", 38)
-        name_font = ImageFont.truetype("arialbd.ttf", 32)
-        small_font = ImageFont.truetype("arialbd.ttf", 20)
-        watermark_font = ImageFont.truetype("arialbd.ttf", 28)
-    except:
-        title_font = ImageFont.load_default()
-        big_font = ImageFont.load_default()
-        name_font = ImageFont.load_default()
-        small_font = ImageFont.load_default()
-        watermark_font = ImageFont.load_default()
+    # استخدام الخطوط الافتراضية عشان Vercel
+    title_font = get_font(55)
+    name_font = get_font(32)
+    small_font = get_font(20)
+    watermark_font = get_font(28)
 
-    # ===== واجهة المستخدم =====
     watermark = "⚡ DRAGONX1M@ ⚡"
-    # ظل للخط
     for offset in range(4, 0, -1):
         draw.text((W//2 - 140 + offset, 25 + offset), watermark,
                  fill=(50, 50, 100, 120), font=watermark_font)
     draw.text((W//2 - 140, 25), watermark,
              fill=(255, 215, 0, 255), font=watermark_font)
     
-    # خط زخرفي تحت الواجهة
     draw.line([(W//2 - 200, 65), (W//2 + 200, 65)], fill=(255, 215, 0, 200), width=2)
 
-    # عنوان رئيسي
     title = "ELITE OUTFIT"
     for offset in range(3, 0, -1):
         draw.text((W//2 - 140 + offset, 85 + offset), title,
                  fill=(100, 100, 200, 100), font=title_font)
     draw.text((W//2 - 140, 85), title, fill=(0, 255, 255, 255), font=title_font)
 
-    # إحداثيات الدوائر
     circles = [
         (250, 280, (0, 255, 255), "HELMET"),
         (250, 500, (255, 0, 255), "VISOR"),
@@ -204,7 +188,6 @@ def outfit_image():
         (950, 720, (255, 0, 255), "PET"),
     ]
 
-    # لصق الصور في الدوائر
     for idx, img in enumerate(outfit_images):
         if idx >= len(circles):
             break
@@ -212,12 +195,10 @@ def outfit_image():
         if img:
             circular = make_circle_with_border(img, 130, color)
             background.paste(circular, (x - 75, y - 75), circular)
-        # اسم القطعة تحت الدائرة
         bbox = draw.textbbox((0, 0), name, font=small_font)
         text_w = bbox[2] - bbox[0]
         draw.text((x - text_w//2, y + 85), name, fill=color, font=small_font)
 
-    # السلاح (دائرة في أسفل المنتصف)
     weapon_x, weapon_y = W//2, 950
     weapon_color = (255, 50, 100)
     if weapon_id:
@@ -236,7 +217,6 @@ def outfit_image():
     
     draw.text((weapon_x - 30, weapon_y + 45), "WEAPON", fill=weapon_color, font=small_font)
 
-    # الحيوان الأليف
     if pet_id:
         pet_url = f'{INFO_URL}/{pet_id}.png'
         pet_img = fetch_image(pet_url, size=(120, 120))
@@ -244,7 +224,6 @@ def outfit_image():
             pet_circle = make_circle_with_border(pet_img, 120, (255, 100, 200))
             background.paste(pet_circle, (950 - 68, 720 - 68), pet_circle)
 
-    # صورة الـ Avatar الرئيسية
     avatar_id = "406"
     for skill in equipped_skills:
         if str(skill).endswith("06"):
@@ -263,7 +242,6 @@ def outfit_image():
             draw.rectangle([ax - 10 + i, ay - 10 + i, ax + avatar_img.width + 10 - i, ay + avatar_img.height + 10 - i],
                           outline=(255, 255, 255, 60), width=1)
 
-    # اسم اللاعب
     name_text = f"🏆 {player_name.upper()} 🏆"
     for offset in range(3, 0, -1):
         draw.text((W//2 - len(name_text)*9 + offset, H - 85 + offset),
@@ -271,15 +249,12 @@ def outfit_image():
     draw.text((W//2 - len(name_text)*9, H - 85),
              name_text, fill=(255, 215, 0, 255), font=name_font)
     
-    # خط زخرفي
     draw.line([(W//2 - 220, H - 50), (W//2 + 220, H - 50)], fill=(0, 255, 255, 200), width=3)
     draw.line([(W//2 - 210, H - 47), (W//2 + 210, H - 47)], fill=(255, 255, 255, 100), width=1)
 
-    # تذييل صغير
     footer = "@DRAGONX1M"
     draw.text((W - 150, H - 30), footer, fill=(255, 255, 255, 150), font=small_font)
 
-    # حفظ الصورة
     img_io = BytesIO()
     background.save(img_io, 'PNG')
     img_io.seek(0)
@@ -296,7 +271,6 @@ def home():
         'example': '/outfit-image?uid=2129828082&key=DRAGON-TEAM'
     })
 
-# هذا مهم لـ Vercel - تصدير التطبيق
 app = app
 
 if __name__ == '__main__':
